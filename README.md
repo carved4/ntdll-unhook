@@ -27,6 +27,28 @@ go build cmd/main.go
 ./cmd.exe
 ```
 
+### Debug Mode
+
+To see detailed debug output showing the unhooking process step-by-step:
+
+**Windows Command Prompt:**
+```cmd
+set WINAPI_DEBUG=true
+cmd.exe
+```
+
+**Windows PowerShell:**
+```powershell
+$env:WINAPI_DEBUG="true"
+./cmd.exe
+```
+
+**Git Bash / WSL:**
+```bash
+export WINAPI_DEBUG=true
+./cmd.exe
+```
+
 ## Disclaimer
 
 This code is intended for educational and research purposes only. 
