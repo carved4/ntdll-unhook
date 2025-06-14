@@ -15,8 +15,6 @@ import (
 const (
 	IMAGE_DOS_SIGNATURE    = 0x5A4D
 	IMAGE_NT_SIGNATURE     = 0x00004550
-	IMAGE_SCN_MEM_EXECUTE  = 0x20000000
-	IMAGE_SCN_CNT_CODE     = 0x00000020
 	PAGE_EXECUTE_READ      = 0x20
 	PAGE_EXECUTE_READWRITE = 0x40
 	PAGE_READONLY          = 0x02
@@ -43,60 +41,6 @@ type IMAGE_DOS_HEADER struct {
 	E_oeminfo  uint16
 	E_res2     [10]uint16
 	E_lfanew   int32
-}
-
-type IMAGE_FILE_HEADER struct {
-	Machine              uint16
-	NumberOfSections     uint16
-	TimeDateStamp        uint32
-	PointerToSymbolTable uint32
-	NumberOfSymbols      uint32
-	SizeOfOptionalHeader uint16
-	Characteristics      uint16
-}
-
-type IMAGE_OPTIONAL_HEADER64 struct {
-	Magic                       uint16
-	MajorLinkerVersion          uint8
-	MinorLinkerVersion          uint8
-	SizeOfCode                  uint32
-	SizeOfInitializedData       uint32
-	SizeOfUninitializedData     uint32
-	AddressOfEntryPoint         uint32
-	BaseOfCode                  uint32
-	ImageBase                   uint64
-	SectionAlignment            uint32
-	FileAlignment               uint32
-	MajorOperatingSystemVersion uint16
-	MinorOperatingSystemVersion uint16
-	MajorImageVersion           uint16
-	MinorImageVersion           uint16
-	MajorSubsystemVersion       uint16
-	MinorSubsystemVersion       uint16
-	Win32VersionValue           uint32
-	SizeOfImage                 uint32
-	SizeOfHeaders               uint32
-	CheckSum                    uint32
-	Subsystem                   uint16
-	DllCharacteristics          uint16
-	SizeOfStackReserve          uint64
-	SizeOfStackCommit           uint64
-	SizeOfHeapReserve           uint64
-	SizeOfHeapCommit            uint64
-	LoaderFlags                 uint32
-	NumberOfRvaAndSizes         uint32
-	DataDirectory               [16]IMAGE_DATA_DIRECTORY
-}
-
-type IMAGE_DATA_DIRECTORY struct {
-	VirtualAddress uint32
-	Size           uint32
-}
-
-type IMAGE_NT_HEADERS64 struct {
-	Signature      uint32
-	FileHeader     IMAGE_FILE_HEADER
-	OptionalHeader IMAGE_OPTIONAL_HEADER64
 }
 
 type IMAGE_SECTION_HEADER struct {
@@ -176,7 +120,6 @@ type OBJECT_ATTRIBUTES struct {
 	SecurityQualityOfService uintptr
 }
 
-// Use the working syscall infrastructure
 func do_syscall(number uintptr, args ...uintptr) (uintptr, error) {
 	return syscall.ExternalSyscall(uint16(number), args...)
 }
@@ -453,136 +396,136 @@ func loadFreshNtdll(syscalls map[string]uintptr) (uintptr, uint32, error) {
 	return baseAddress, uint32(viewSize), nil
 }
 
-func createSuspendedProcess(syscalls map[string]uintptr) (uintptr, error) {
-	// Create a suspended process using NtCreateProcess
-	var processHandle uintptr
+// func createSuspendedProcess(syscalls map[string]uintptr) (uintptr, error) {
+// 	// Create a suspended process using NtCreateProcess
+// 	var processHandle uintptr
 	
-	// Set up object attributes
-	var objAttr OBJECT_ATTRIBUTES
-	objAttr.Length = uint32(unsafe.Sizeof(objAttr))
-	objAttr.RootDirectory = 0
-	objAttr.ObjectName = 0
-	objAttr.Attributes = 0
-	objAttr.SecurityDescriptor = 0
-	objAttr.SecurityQualityOfService = 0
+// 	// Set up object attributes
+// 	var objAttr OBJECT_ATTRIBUTES
+// 	objAttr.Length = uint32(unsafe.Sizeof(objAttr))
+// 	objAttr.RootDirectory = 0
+// 	objAttr.ObjectName = 0
+// 	objAttr.Attributes = 0
+// 	objAttr.SecurityDescriptor = 0
+// 	objAttr.SecurityQualityOfService = 0
 	
-	// Create process object using direct syscall
-	status, err := do_syscall(syscalls["NtCreateProcess"],
-		uintptr(unsafe.Pointer(&processHandle)),
-		0x1FFFFF, // PROCESS_ALL_ACCESS
-		uintptr(unsafe.Pointer(&objAttr)), 
-		getCurrentProcess(), 
-		0, // InheritObjectTable (false)
-		0, // SectionHandle (0 means create new address space)
-		0, // DebugPort
-		0) // ExceptionPort
+// 	// Create process object using direct syscall
+// 	status, err := do_syscall(syscalls["NtCreateProcess"],
+// 		uintptr(unsafe.Pointer(&processHandle)),
+// 		0x1FFFFF, // PROCESS_ALL_ACCESS
+// 		uintptr(unsafe.Pointer(&objAttr)), 
+// 		getCurrentProcess(), 
+// 		0, // InheritObjectTable (false)
+// 		0, // SectionHandle (0 means create new address space)
+// 		0, // DebugPort
+// 		0) // ExceptionPort
 	
-	if err != nil {
-		return 0, fmt.Errorf("NtCreateProcess failed: %v", err)
-	}
+// 	if err != nil {
+// 		return 0, fmt.Errorf("NtCreateProcess failed: %v", err)
+// 	}
 	
-	if status != 0 {
-		return 0, fmt.Errorf("NtCreateProcess failed with status: 0x%x", status)
-	}
+// 	if status != 0 {
+// 		return 0, fmt.Errorf("NtCreateProcess failed with status: 0x%x", status)
+// 	}
 	
-	return processHandle, nil
-}
+// 	return processHandle, nil
+// }
 
-func getRemoteNtdllInfo(processHandle uintptr, syscalls map[string]uintptr) (uintptr, uint32, error) {
-	// Get the PEB address of the remote process
-	var pbi ProcessBasicInformation
-	var returnLength uintptr
+// func getRemoteNtdllInfo(processHandle uintptr, syscalls map[string]uintptr) (uintptr, uint32, error) {
+// 	// Get the PEB address of the remote process
+// 	var pbi ProcessBasicInformation
+// 	var returnLength uintptr
 	
-	status, err := do_syscall(syscalls["NtQueryInformationProcess"],
-		processHandle,
-		0, // ProcessBasicInformation
-		uintptr(unsafe.Pointer(&pbi)),
-		unsafe.Sizeof(pbi),
-		uintptr(unsafe.Pointer(&returnLength)))
+// 	status, err := do_syscall(syscalls["NtQueryInformationProcess"],
+// 		processHandle,
+// 		0, // ProcessBasicInformation
+// 		uintptr(unsafe.Pointer(&pbi)),
+// 		unsafe.Sizeof(pbi),
+// 		uintptr(unsafe.Pointer(&returnLength)))
 	
-	if err != nil {
-		return 0, 0, fmt.Errorf("NtQueryInformationProcess failed: %v", err)
-	}
+// 	if err != nil {
+// 		return 0, 0, fmt.Errorf("NtQueryInformationProcess failed: %v", err)
+// 	}
 	
-	if status != 0 {
-		return 0, 0, fmt.Errorf("NtQueryInformationProcess failed with status: 0x%x", status)
-	}
+// 	if status != 0 {
+// 		return 0, 0, fmt.Errorf("NtQueryInformationProcess failed with status: 0x%x", status)
+// 	}
 	
-	// Read the PEB from remote process
-	var remotePeb PEB
-	var bytesRead uintptr
+// 	// Read the PEB from remote process
+// 	var remotePeb PEB
+// 	var bytesRead uintptr
 	
-	status, err = do_syscall(syscalls["NtReadVirtualMemory"],
-		processHandle,
-		pbi.PebBaseAddress,
-		uintptr(unsafe.Pointer(&remotePeb)),
-		unsafe.Sizeof(remotePeb),
-		uintptr(unsafe.Pointer(&bytesRead)))
+// 	status, err = do_syscall(syscalls["NtReadVirtualMemory"],
+// 		processHandle,
+// 		pbi.PebBaseAddress,
+// 		uintptr(unsafe.Pointer(&remotePeb)),
+// 		unsafe.Sizeof(remotePeb),
+// 		uintptr(unsafe.Pointer(&bytesRead)))
 	
-	if err != nil {
-		return 0, 0, fmt.Errorf("failed to read remote PEB: %v", err)
-	}
+// 	if err != nil {
+// 		return 0, 0, fmt.Errorf("failed to read remote PEB: %v", err)
+// 	}
 	
-	// Read the PEB_LDR_DATA from remote process
-	var remoteLdr PEB_LDR_DATA
-	status, err = do_syscall(syscalls["NtReadVirtualMemory"],
-		processHandle,
-		remotePeb.Ldr,
-		uintptr(unsafe.Pointer(&remoteLdr)),
-		unsafe.Sizeof(remoteLdr),
-		uintptr(unsafe.Pointer(&bytesRead)))
+// 	// Read the PEB_LDR_DATA from remote process
+// 	var remoteLdr PEB_LDR_DATA
+// 	status, err = do_syscall(syscalls["NtReadVirtualMemory"],
+// 		processHandle,
+// 		remotePeb.Ldr,
+// 		uintptr(unsafe.Pointer(&remoteLdr)),
+// 		unsafe.Sizeof(remoteLdr),
+// 		uintptr(unsafe.Pointer(&bytesRead)))
 	
-	if err != nil {
-		return 0, 0, fmt.Errorf("failed to read remote LDR: %v", err)
-	}
+// 	if err != nil {
+// 		return 0, 0, fmt.Errorf("failed to read remote LDR: %v", err)
+// 	}
 	
-	// Walk the remote InLoadOrderModuleList to find ntdll
-	head := remotePeb.Ldr + unsafe.Offsetof(remoteLdr.InLoadOrderModuleList)
-	current := remoteLdr.InLoadOrderModuleList[0]
+// 	// Walk the remote InLoadOrderModuleList to find ntdll
+// 	head := remotePeb.Ldr + unsafe.Offsetof(remoteLdr.InLoadOrderModuleList)
+// 	current := remoteLdr.InLoadOrderModuleList[0]
 	
-	for current != head {
-		var entry LDR_DATA_TABLE_ENTRY
-		status, err = do_syscall(syscalls["NtReadVirtualMemory"],
-			processHandle,
-			current,
-			uintptr(unsafe.Pointer(&entry)),
-			unsafe.Sizeof(entry),
-			uintptr(unsafe.Pointer(&bytesRead)))
+// 	for current != head {
+// 		var entry LDR_DATA_TABLE_ENTRY
+// 		status, err = do_syscall(syscalls["NtReadVirtualMemory"],
+// 			processHandle,
+// 			current,
+// 			uintptr(unsafe.Pointer(&entry)),
+// 			unsafe.Sizeof(entry),
+// 			uintptr(unsafe.Pointer(&bytesRead)))
 		
-		if err != nil {
-			return 0, 0, fmt.Errorf("failed to read LDR entry: %v", err)
-		}
+// 		if err != nil {
+// 			return 0, 0, fmt.Errorf("failed to read LDR entry: %v", err)
+// 		}
 		
-		// Read the DLL name
-		if entry.BaseDllName.Buffer != nil && entry.BaseDllName.Length > 0 {
-			nameLen := int(entry.BaseDllName.Length / 2)
-			nameBuffer := make([]uint16, nameLen)
+// 		// Read the DLL name
+// 		if entry.BaseDllName.Buffer != nil && entry.BaseDllName.Length > 0 {
+// 			nameLen := int(entry.BaseDllName.Length / 2)
+// 			nameBuffer := make([]uint16, nameLen)
 			
-			status, err = do_syscall(syscalls["NtReadVirtualMemory"],
-				processHandle,
-				uintptr(unsafe.Pointer(entry.BaseDllName.Buffer)),
-				uintptr(unsafe.Pointer(&nameBuffer[0])),
-				uintptr(entry.BaseDllName.Length),
-				uintptr(unsafe.Pointer(&bytesRead)))
+// 			status, err = do_syscall(syscalls["NtReadVirtualMemory"],
+// 				processHandle,
+// 				uintptr(unsafe.Pointer(entry.BaseDllName.Buffer)),
+// 				uintptr(unsafe.Pointer(&nameBuffer[0])),
+// 				uintptr(entry.BaseDllName.Length),
+// 				uintptr(unsafe.Pointer(&bytesRead)))
 			
-			if err == nil {
-				dllName := UTF16ToString(nameBuffer)
-				if dllName == "ntdll.dll" {
-					return entry.DllBase, entry.SizeOfImage, nil
-				}
-			}
-		}
+// 			if err == nil {
+// 				dllName := UTF16ToString(nameBuffer)
+// 				if dllName == "ntdll.dll" {
+// 					return entry.DllBase, entry.SizeOfImage, nil
+// 				}
+// 			}
+// 		}
 		
-		current = entry.InLoadOrderLinks[0]
+// 		current = entry.InLoadOrderLinks[0]
 		
-		// Prevent infinite loops
-		if current == 0 {
-			break
-		}
-	}
+// 		// Prevent infinite loops
+// 		if current == 0 {
+// 			break
+// 		}
+// 	}
 	
-	return 0, 0, fmt.Errorf("ntdll.dll not found in remote process")
-}
+// 	return 0, 0, fmt.Errorf("ntdll.dll not found in remote process")
+// }
 
 type ProcessBasicInformation struct {
 	ExitStatus                   uintptr
